@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Class Attendance | Fingerprint Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme {
+    --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+    --color-brand-50: #eef2ff; --color-brand-100: #e0e7ff; --color-brand-500: #6366f1;
+    --color-brand-600: #4f46e5; --color-brand-700: #4338ca;
+  }
+  body { font-family: var(--font-sans); }
+  .font-display { font-family: var(--font-serif); }
+  .name-input:focus { box-shadow: 0 0 0 3px rgba(99,102,241,.25); }
+  @media (prefers-reduced-motion: no-preference) {
+    .banner { transition: background-color .3s, border-color .3s; }
+  }
+</style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+
+<nav class="sticky top-0 z-50 border-b border-slate-200 bg-white/80 backdrop-blur-md">
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+    <div>
+      <div class="text-sm font-semibold">Class Attendance</div>
+      <div class="text-xs text-slate-500">Fingerprint log, teacher opens each session</div>
+    </div>
+    <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
+      <span id="statusDot" class="h-2 w-2 rounded-full bg-slate-300"></span>
+      <span id="statusText">Checking server…</span>
+    </div>
+  </div>
+</nav>
+
+<main class="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+
+  <!-- Session banner: the main thing on this page -->
+  <section id="banner" class="banner rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+    <div class="flex flex-wrap items-end justify-between gap-6">
+      <div class="max-w-xl">
+        <p id="bannerLabel" class="text-sm font-semibold text-slate-500">Current session</p>
+        <h1 id="bannerTitle" class="font-display mt-1 text-4xl leading-tight text-slate-900 sm:text-5xl">Loading…</h1>
+        <p id="bannerText" class="mt-3 text-base leading-relaxed text-slate-600"></p>
+      </div>
+      <div class="text-right">
+        <p id="presentCount" class="font-display text-6xl leading-none text-slate-900">–</p>
+        <p id="presentLabel" class="mt-1 text-sm text-slate-500">students present</p>
+      </div>
+    </div>
+    <p class="mt-6 border-t border-slate-100 pt-4 text-xs text-slate-500">
+      To start a new session, press the device button 3 times. The teacher must mark before any student can.
+    </p>
+  </section>
+
+  <!-- Stats -->
+  <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <p class="text-sm text-slate-500">Enrolled</p>
+      <p id="statUsers" class="mt-2 text-3xl font-bold">–</p>
+      <p id="statSlots" class="mt-1 text-xs text-slate-400">teacher + students</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <p class="text-sm text-slate-500">Sessions held</p>
+      <p id="statSessions" class="mt-2 text-3xl font-bold">–</p>
+      <p class="mt-1 text-xs text-slate-400">since the first</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <p class="text-sm text-slate-500">Session started</p>
+      <p id="statStarted" class="mt-2 text-xl font-bold">–</p>
+      <p id="statStartedAgo" class="mt-1 text-xs text-slate-400"></p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <p class="text-sm text-slate-500">Last mark</p>
+      <p id="statLastScan" class="mt-2 truncate text-xl font-bold">–</p>
+      <p id="statLastScanTime" class="mt-1 text-xs text-slate-400">no marks yet</p>
+    </div>
+  </section>
+
+  <!-- Roster -->
+  <section class="rounded-2xl border border-slate-200 bg-white">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-4">
+      <div>
+        <h2 class="text-base font-semibold">Roster</h2>
+        <p class="text-xs text-slate-500">Who has marked in the current session. Click a name to edit it.</p>
+      </div>
+      <button id="refreshBtn" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-brand-500">Refresh</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-100 text-left text-xs font-semibold text-slate-500">
+            <th class="px-6 py-3">Slot</th><th class="px-6 py-3">Name</th><th class="px-6 py-3">Role</th>
+            <th class="px-6 py-3">This session</th><th class="px-6 py-3">Total visits</th>
+            <th class="px-6 py-3">Last seen</th><th class="px-6 py-3"></th>
+          </tr>
+        </thead>
+        <tbody id="usersBody" class="divide-y divide-slate-100"></tbody>
+      </table>
+      <div id="usersEmpty" class="hidden px-6 py-12 text-center text-sm text-slate-500">
+        No one is enrolled yet. Press the device button once and enroll the teacher first.
+      </div>
+    </div>
+  </section>
+
+  <div class="grid gap-8 lg:grid-cols-5">
+    <!-- Feed -->
+    <section class="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-3">
+      <h3 class="text-lg font-semibold">Recent marks</h3>
+      <p class="text-xs text-slate-500">Most recent first, with the session each belongs to</p>
+      <div id="feed" class="mt-4 divide-y divide-slate-100"></div>
+    </section>
+
+    <!-- Past sessions -->
+    <section class="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-2">
+      <h3 class="text-lg font-semibold">Past sessions</h3>
+      <p class="text-xs text-slate-500">Latest first</p>
+      <div id="sessions" class="mt-4 divide-y divide-slate-100"></div>
+    </section>
+  </div>
+</main>
+
+<footer class="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
+  Class Attendance, fingerprint log with teacher-first sessions
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const parseUtc = (s) => new Date(s.replace(' ', 'T') + 'Z');
+
+let users = [];
+let markedSlots = [];
+let teacherSlot = 1;
+
+function timeAgo(s) {
+  if (!s) return '';
+  const mins = Math.floor((Date.now() - parseUtc(s).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return parseUtc(s).toLocaleDateString();
+}
+const clock = (s) => parseUtc(s).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+const labelFor = (u) => u.name || (u.slot_id === teacherSlot ? 'Teacher' : `Student, slot ${u.slot_id}`);
+
+function setStatus(ok, text) {
+  $('statusDot').className = `h-2 w-2 rounded-full ${ok ? 'bg-emerald-500' : 'bg-amber-400'}`;
+  $('statusText').textContent = text;
+}
+
+async function getJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(res.status);
+  return res.json();
+}
+
+async function checkHealth() {
+  try {
+    const d = await getJson('/api/health');
+    setStatus(true, `Online, ${d.enrolled_users}/${d.max_slots} slots used`);
+  } catch { setStatus(false, 'Server offline'); }
+}
+
+// ---- Banner + stats ---------------------------------------------------
+function renderBanner(d) {
+  const banner = $('banner');
+  const noTeacher = !users.some((u) => u.slot_id === teacherSlot);
+  let tone, title, text;
+
+  if (noTeacher) {
+    tone = 'border-sky-200 bg-sky-50';
+    title = 'Enroll the teacher first';
+    text = 'Slot 1 is always the teacher. Press the device button once and have the teacher enroll their fingerprint before any student.';
+  } else if (!d.teacher_marked) {
+    tone = 'border-amber-200 bg-amber-50';
+    title = 'Waiting for the teacher';
+    text = 'Students cannot mark yet. The class opens as soon as the teacher scans their finger.';
+  } else {
+    tone = 'border-emerald-200 bg-emerald-50';
+    title = 'Class is open';
+    text = 'The teacher has marked. Students can now scan, once each.';
+  }
+  banner.className = `banner rounded-2xl border p-6 sm:p-8 ${tone}`;
+  $('bannerTitle').textContent = title;
+  $('bannerText').textContent = text;
+  $('presentCount').textContent = `${d.students_present}/${d.students_enrolled}`;
+  $('presentLabel').textContent = d.students_enrolled === 1 ? 'student present' : 'students present';
+}
+
+async function fetchStats() {
+  try {
+    const d = await getJson('/api/stats');
+    const cs = d.current_session;
+    markedSlots = cs.marked_slots || [];
+    renderBanner({
+      teacher_marked: cs.teacher_marked,
+      students_present: cs.students_present,
+      students_enrolled: users.filter((u) => u.slot_id !== teacherSlot).length,
+    });
+
+    $('statUsers').textContent = d.total_users;
+    $('statSlots').textContent = `of ${d.max_slots} slots, ${d.free_slots} free`;
+    $('statSessions').textContent = d.total_sessions;
+    $('statStarted').textContent = parseUtc(cs.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    $('statStartedAgo').textContent = timeAgo(cs.started_at);
+
+    if (d.last_scan) {
+      $('statLastScan').textContent = d.last_scan.name || `Slot ${d.last_scan.slot_id}`;
+      $('statLastScanTime').textContent = timeAgo(d.last_scan.timestamp);
+    } else {
+      $('statLastScan').textContent = '–';
+      $('statLastScanTime').textContent = 'no marks yet';
+    }
+    renderUsers();
+  } catch { /* keep last values */ }
+}
+
+// ---- Roster -------------------------------------------------------------
+function rowMarkup(u) {
+  const isTeacher = u.slot_id === teacherSlot;
+  const present = markedSlots.includes(u.slot_id);
+  const badge = present
+    ? '<span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">Present</span>'
+    : '<span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Not marked</span>';
+  const role = isTeacher
+    ? '<span class="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">Teacher</span>'
+    : '<span class="text-xs text-slate-500">Student</span>';
+  return `
+    <td class="px-6 py-3 font-mono text-xs text-slate-500">#${u.slot_id}</td>
+    <td class="px-6 py-3"><input type="text" aria-label="Name for slot ${u.slot_id}" class="name-input w-full max-w-[170px] rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-sm outline-none focus:border-brand-500 focus:bg-white"
+      value="${esc(u.name)}" placeholder="Add name…" data-slot-id="${u.slot_id}"></td>
+    <td class="px-6 py-3">${role}</td>
+    <td class="px-6 py-3">${badge}</td>
+    <td class="px-6 py-3"><span class="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700">${u.visit_count}</span></td>
+    <td class="px-6 py-3 text-xs text-slate-500">${u.last_seen ? timeAgo(u.last_seen) : 'never'}</td>
+    <td class="px-6 py-3 text-right"><button class="delete-btn text-xs font-medium text-rose-600 hover:text-rose-800" data-slot-id="${u.slot_id}">Remove</button></td>`;
+}
+
+function renderUsers() {
+  // Don't rebuild the table while someone is typing a name
+  if (document.activeElement && document.activeElement.classList.contains('name-input')) return;
+
+  const body = $('usersBody');
+  $('usersEmpty').classList.toggle('hidden', users.length > 0);
+  body.innerHTML = '';
+
+  users.forEach((u) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = rowMarkup(u);
+    body.appendChild(tr);
+  });
+
+  body.querySelectorAll('.name-input').forEach((input) => {
+    let original = input.value;
+    input.addEventListener('blur', async () => {
+      const v = input.value.trim();
+      if (v === original) return;
+      try {
+        const res = await fetch(`/api/users/${input.dataset.slotId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: v }),
+        });
+        if (res.ok) {
+          original = v;
+          const u = users.find((x) => x.slot_id === Number(input.dataset.slotId));
+          if (u) u.name = v;
+        }
+      } catch { /* user can retry */ }
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  });
+
+  body.querySelectorAll('.delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.dataset.slotId);
+      const warn = id === teacherSlot
+        ? 'Remove the TEACHER (slot 1)? Students cannot mark until a teacher is enrolled again. This only clears the server record; the fingerprint stays on the sensor.'
+        : `Remove the user in slot ${id}? This only clears the server record; the fingerprint stays on the sensor.`;
+      if (!confirm(warn)) return;
+      try {
+        const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Could not remove this user.');
+          return;
+        }
+      } catch { alert('Server unreachable. Try again.'); return; }
+      await fetchUsers();
+      fetchStats();
+    });
+  });
+}
+
+async function fetchUsers() {
+  try {
+    const d = await getJson('/api/users');
+    users = d.users || [];
+    teacherSlot = d.teacher_slot || 1;
+    renderUsers();
+  } catch { /* keep last */ }
+}
+
+// ---- Feed ------------------------------------------------------------------
+async function fetchFeed() {
+  try {
+    const d = await getJson('/api/attendance');
+    const feed = $('feed');
+    if (!d.log.length) {
+      feed.innerHTML = '<div class="py-10 text-center text-sm text-slate-500">No marks yet. Once the teacher scans, they will appear here.</div>';
+      return;
+    }
+    feed.innerHTML = d.log.map((i) => `
+      <div class="flex items-center justify-between gap-3 py-3">
+        <div>
+          <p class="font-semibold text-slate-800">${esc(i.name || (i.role === 'teacher' ? 'Teacher' : 'Slot ' + i.slot_id))}
+            ${i.role === 'teacher' ? '<span class="ml-1 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700">Teacher</span>' : ''}</p>
+          <p class="text-xs text-slate-500">${i.timestamp ? clock(i.timestamp) : ''}</p>
+        </div>
+        <span class="shrink-0 text-xs text-slate-500">Session ${i.session_id ?? '–'}</span>
+      </div>`).join('');
+  } catch { /* keep last */ }
+}
+
+// ---- Past sessions ---------------------------------------------------------
+async function fetchSessions() {
+  try {
+    const d = await getJson('/api/sessions');
+    $('sessions').innerHTML = d.sessions.map((s, idx) => `
+      <div class="flex items-center justify-between gap-3 py-3">
+        <div>
+          <p class="font-semibold text-slate-800">Session ${s.id} ${idx === 0 ? '<span class="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Current</span>' : ''}</p>
+          <p class="text-xs text-slate-500">${clock(s.started_at)}</p>
+        </div>
+        <div class="text-right text-xs text-slate-500">
+          <p>${s.students_present} students</p>
+          <p>${s.teacher_marked ? 'Teacher marked' : 'No teacher mark'}</p>
+        </div>
+      </div>`).join('') || '<div class="py-10 text-center text-sm text-slate-500">No sessions yet.</div>';
+  } catch { /* keep last */ }
+}
+
+$('refreshBtn').addEventListener('click', async () => {
+  await fetchUsers(); fetchStats(); fetchFeed(); fetchSessions();
+});
+
+(async function init() {
+  checkHealth();
+  await fetchUsers();
+  fetchStats(); fetchFeed(); fetchSessions();
+  setInterval(checkHealth, 5000);
+  setInterval(fetchStats, 4000);
+  setInterval(fetchFeed, 4000);
+  setInterval(fetchSessions, 8000);
+  setInterval(fetchUsers, 10000);
+})();
+</script>
+</body>
+</html>
