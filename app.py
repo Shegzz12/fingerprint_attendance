@@ -8,7 +8,7 @@ app = Flask(__name__, template_folder="templates")
 CORS(app)
 
 DB_PATH = "attendance.db"
-MAX_SLOTS = 10      # must match MAX_USERS in the ESP32 firmware
+MAX_SLOTS = 162      # must match MAX_USERS in the ESP32 firmware
 TEACHER_SLOT = 1    # the first record in the database is always the teacher
 
 
@@ -186,6 +186,9 @@ def get_users():
     conn = get_conn()
     rows = conn.execute("SELECT * FROM users ORDER BY slot_id ASC").fetchall()
     conn.close()
+    if request.args.get("compact"):
+        return jsonify({"success": True, "users": [
+            {"slot_id": r["slot_id"], "visit_count": r["visit_count"]} for r in rows]})
     return jsonify({
         "success": True,
         "max_slots": MAX_SLOTS,
